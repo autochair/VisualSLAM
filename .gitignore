@@ -1,5 +1,6 @@
 # Folders
-VisionWorks/*/bin/
+**/bin/
+**/lib/
 
 # Prerequisites
 *.d
