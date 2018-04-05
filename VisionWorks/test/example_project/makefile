@@ -154,6 +154,6 @@ run: build
 	./$(OUTPUT_DIR)/nvx_demo_hough_transform
 
 clean:
-	rm -f $(OBJ_FILES_CPP)
+	rm -f $(addprefix $(OBJ_DIR)/,$(notdir $(OBJ_FILES_CPP)))
 	rm -f $(OUTPUT_DIR)/nvx_demo_hough_transform
 
