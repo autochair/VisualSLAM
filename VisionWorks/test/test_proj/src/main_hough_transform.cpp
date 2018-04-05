@@ -238,6 +238,8 @@ void keyboardEventCallback(void* eventData, vx_char key, vx_uint32 /*x*/, vx_uin
 // parameters are read into the configFile
 //
 
+#include "test.hpp"
+
 int main(int argc, char** argv)
 {
     try
