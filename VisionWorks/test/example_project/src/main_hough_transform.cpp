@@ -251,9 +251,9 @@ int main(int argc, char** argv)
         // Parse command line arguments
         //
 
-        std::string sourceUri = app.findSampleFilePath("signs.avi");
+        std::string sourceUri = app.findSampleFilePath("videos/signs.avi");
 
-        std::string configFile = app.findSampleFilePath("hough_transform_demo_config.ini");
+        std::string configFile = app.findSampleFilePath("configs/hough_transform_demo_config.ini");
         HoughTransformDemoParams params;
 
         app.setDescription("This demo demonstrates circles and lines detection via Hough transform");
