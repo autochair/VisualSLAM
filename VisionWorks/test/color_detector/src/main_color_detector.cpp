@@ -55,13 +55,19 @@ namespace {
     vx_uint32 sourceWidth;
     vx_uint32 sourceHeight;
     vx_uint32 fps;
-    vx_int32  binaryThreshold;
+    vx_int32  uUpperThreshold;
+    vx_int32  uLowerThreshold;
+    vx_int32  vUpperThreshold;
+    vx_int32  vLowerThreshold;    
 
     ProcessParams()
       : sourceWidth(1280),
         sourceHeight(720),
         fps(120),
-        binaryThreshold(127)
+        uUpperThreshold(127),
+        uLowerThreshold(127),
+        vUpperThreshold(127),
+        vLowerThreshold(127)
     {}
   };
 
@@ -91,9 +97,18 @@ namespace {
     parser->addParameter("fps",
                          nvxio::OptionHandler::unsignedInteger(&config.fps,
                                                                nvxio::ranges::atLeast(10u) & nvxio::ranges::atMost(120u)));
-    parser->addParameter("binaryThreshold",
-                         nvxio::OptionHandler::integer(&config.binaryThreshold,
+    parser->addParameter("uUpperThreshold",
+                         nvxio::OptionHandler::integer(&config.uUpperThreshold,
                                                        nvxio::ranges::atLeast(0) & nvxio::ranges::atMost(255)));
+    parser->addParameter("uLowerThreshold",
+                         nvxio::OptionHandler::integer(&config.uLowerThreshold,
+                                                       nvxio::ranges::atLeast(0) & nvxio::ranges::atMost(255)));
+    parser->addParameter("vUpperThreshold",
+                         nvxio::OptionHandler::integer(&config.vUpperThreshold,
+                                                       nvxio::ranges::atLeast(0) & nvxio::ranges::atMost(255)));
+    parser->addParameter("vLowerThreshold",
+                         nvxio::OptionHandler::integer(&config.vLowerThreshold,
+                                                       nvxio::ranges::atLeast(0) & nvxio::ranges::atMost(255)));    
     error = parser->parse(configFile);
 
     if(!error.empty())
@@ -199,7 +214,7 @@ int main(int argc, char** argv)
         {
           std::cout << "Error: cannot set the frame source to the specified configuration!" << std::endl;
           return nvxio::Application::APP_EXIT_CODE_NO_RESOURCE;
-        }
+          }
 
       if(!frameSource->open())
         {
@@ -225,18 +240,57 @@ int main(int argc, char** argv)
 
       //image object to hold frames from video stream
       vx_image frame = vxCreateImage(context, frameConfig.frameWidth, frameConfig.frameHeight, frameConfig.format);
-      // vx_image frame = vxCreateImage(context, frameConfig.frameWidth, frameConfig.frameHeight, VX_DF_IMAGE_RGBX);
       NVXIO_CHECK_REFERENCE(frame);
 
       //image to hold output
-      vx_image output = vxCreateImage(context, frameConfig.frameWidth, frameConfig.frameHeight, VX_DF_IMAGE_RGB);
+      vx_image output = vxCreateImage(context, frameConfig.frameWidth, frameConfig.frameHeight, frameConfig.format);
+      //vx_image output = vxCreateImage(context, frameConfig.frameWidth, frameConfig.frameHeight, VX_DF_IMAGE_U8);
       NVXIO_CHECK_REFERENCE(output);
 
       //thresholds
-      vx_threshold binaryThreshold = vxCreateThreshold(context,VX_THRESHOLD_TYPE_BINARY,VX_TYPE_UINT8);
-      NVXIO_CHECK_REFERENCE(binaryThreshold);
-      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binaryThreshold, VX_THRESHOLD_THRESHOLD_VALUE,
-                                               &params.binaryThreshold,sizeof(params.binaryThreshold)));
+      vx_threshold uThreshold = vxCreateThreshold(context,VX_THRESHOLD_TYPE_RANGE,VX_TYPE_UINT8);
+      NVXIO_CHECK_REFERENCE(uThreshold);
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(uThreshold, VX_THRESHOLD_THRESHOLD_LOWER,
+                                               &params.uLowerThreshold,sizeof(params.uLowerThreshold)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(uThreshold, VX_THRESHOLD_THRESHOLD_UPPER,
+                                               &params.uUpperThreshold,sizeof(params.uUpperThreshold)));
+
+      vx_threshold vThreshold = vxCreateThreshold(context,VX_THRESHOLD_TYPE_RANGE,VX_TYPE_UINT8);
+      NVXIO_CHECK_REFERENCE(vThreshold);
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(vThreshold, VX_THRESHOLD_THRESHOLD_LOWER,
+                                               &params.vLowerThreshold,sizeof(params.vLowerThreshold)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(vThreshold, VX_THRESHOLD_THRESHOLD_UPPER,
+                                               &params.vUpperThreshold,sizeof(params.vUpperThreshold)));
+
+      vx_int32 fVal = 255;
+      vx_int32 tVal = 0;
+      vx_threshold binuThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
+      vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_THRESHOLD_VALUE,
+                              &params.uUpperThreshold, sizeof(params.uUpperThreshold));
+      vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_FALSE_VALUE,
+                              &fVal, sizeof(fVal));
+      vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_TRUE_VALUE,
+                              &tVal, sizeof(tVal));
+
+      vx_threshold binvThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
+      vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_THRESHOLD_VALUE,
+                              &params.vUpperThreshold, sizeof(params.vUpperThreshold));
+      vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_FALSE_VALUE,
+                              &fVal, sizeof(fVal));
+      vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_TRUE_VALUE,
+                              &tVal, sizeof(tVal));
+
+      vx_int32 uvVal = 1;
+      fVal = 128;
+      vx_threshold uvThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
+      vxSetThresholdAttribute(uvThresh, VX_THRESHOLD_THRESHOLD_VALUE,
+                              &uvVal, sizeof(uvVal));
+      vxSetThresholdAttribute(uvThresh, VX_THRESHOLD_FALSE_VALUE,
+                            &fVal, sizeof(fVal));
+
+                              
+                              
+                              
 
       //create graph
       vx_graph graph = vxCreateGraph(context);
@@ -245,37 +299,95 @@ int main(int argc, char** argv)
       //
       //virtual images for processing pipeline
       //
+
+      vx_image inputYUV = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_IYUV);
+      NVXIO_CHECK_REFERENCE(inputYUV);
+
+      vx_image inputY = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(inputY);
+
+      vx_image scaledInputY = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(scaledInputY);      
+
+      vx_image inputU = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(inputU);
+
+      vx_image scaledInputU = vxCreateVirtualImage(graph, frameConfig.frameWidth, frameConfig.frameHeight,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(scaledInputU);      
+
+      vx_image inputV = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(inputV);
+
+      vx_image scaledInputV = vxCreateVirtualImage(graph, frameConfig.frameWidth, frameConfig.frameHeight,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(scaledInputV);
       
-      vx_image inputRGB = vxCreateVirtualImage(graph, 0, 0, VX_DF_IMAGE_RGB);
-      NVXIO_CHECK_REFERENCE(inputRGB);
+      vx_image binaryU = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(binaryU);
+
+      vx_image binaryV = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(binaryV);
+
+      vx_image mask = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(mask);
+
+      vx_image outY = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(outY);
+
+      vx_image outU = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(outU);
+
+      vx_image outV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(outV);
+
+      vx_image threshedOutU = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      vx_image threshedOutV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+
+      vx_image scaledOutV = vxCreateVirtualImage(graph, frameConfig.frameWidth/2, frameConfig.frameHeight/2, VX_DF_IMAGE_U8);
+      vx_image scaledOutU = vxCreateVirtualImage(graph, frameConfig.frameWidth/2, frameConfig.frameHeight/2, VX_DF_IMAGE_U8);
       
-      vx_image green = vxCreateVirtualImage(graph, 0, 0, VX_DF_IMAGE_U8);
-      NVXIO_CHECK_REFERENCE(green);
 
-      vx_image binary = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
-      NVXIO_CHECK_REFERENCE(binary);
+      
+      vx_image outYUV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_IYUV);
 
-      vx_image eroded = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
-      NVXIO_CHECK_REFERENCE(eroded);
 
-      vx_image dilated = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
-      NVXIO_CHECK_REFERENCE(dilated);
 
-      vx_pixel_value_t bl = {U8:0};
-      vx_image black = vxCreateUniformImage(context, frameConfig.frameWidth, frameConfig.frameHeight, VX_DF_IMAGE_U8, &bl);
+
+      
+
+
 
       //
       //graph node creation
       //
-      
-      vx_node toRGBNode = vxColorConvertNode(graph, frame, inputRGB);
-      NVXIO_CHECK_REFERENCE(toRGBNode);
-      
-      vx_node greenExtractNode = vxChannelExtractNode(graph, inputRGB, VX_CHANNEL_G, green);
-      NVXIO_CHECK_REFERENCE(greenExtractNode);
 
-      vx_node recombineNode = vxChannelCombineNode(graph, black, green, black, NULL, output);
-      NVXIO_CHECK_REFERENCE(recombineNode);
+      vx_node convertNode = vxColorConvertNode(graph, frame, inputYUV);
+      vx_node extractYNode = vxChannelExtractNode(graph, inputYUV, VX_CHANNEL_Y, inputY);
+      vx_node extractUNode = vxChannelExtractNode(graph, inputYUV, VX_CHANNEL_U, inputU);
+      vx_node extractVNode = vxChannelExtractNode(graph, inputYUV, VX_CHANNEL_V, inputV);
+      vx_node scaleUNode = vxScaleImageNode(graph, inputU, scaledInputU, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      vx_node scaleVNode = vxScaleImageNode(graph, inputV, scaledInputV, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      vx_node thresholdUNode1 = vxThresholdNode(graph, scaledInputU, binuThresh, binaryU);
+      vx_node thresholdVNode1 = vxThresholdNode(graph, scaledInputV, binvThresh, binaryV);
+      
+
+      vx_node maskNode = vxAndNode(graph, binaryU, binaryV, mask);
+      //vx_node maskNode1 = vxAndNode(graph, binaryU, binaryV, output);
+      vx_node outYNode = vxAndNode(graph, inputY, mask, outY);
+      vx_node outUNode = vxAndNode(graph, scaledInputU, mask, outU);
+      vx_node outVNode = vxAndNode(graph, scaledInputV, mask, outV);
+      vx_node scaleOutVNode = vxScaleImageNode(graph, outV, scaledOutV, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      vx_node scaleOutUNode = vxScaleImageNode(graph, outU, scaledOutU, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      vx_node outUThresholdNode = vxThresholdNode(graph, scaledOutU, uvThresh, threshedOutU);
+      vx_node outVThresholdNode = vxThresholdNode(graph, scaledOutV, uvThresh, threshedOutV);
+
+
+            
+
+      vx_node recombineNode = vxChannelCombineNode(graph, outY, threshedOutU, threshedOutV, NULL, outYUV);
+
+      vx_node convertOutputNode = vxColorConvertNode(graph, outYUV, output);
+
+      
 
       
       /*
@@ -295,12 +407,21 @@ int main(int argc, char** argv)
       //
 
       //      vxReleaseImage(&grayscale);
-      vxReleaseImage(&inputRGB);
-      vxReleaseImage(&green);
-      vxReleaseImage(&binary);
-      vxReleaseImage(&eroded);
-      vxReleaseImage(&dilated);
-      vxReleaseImage(&black);
+      vxReleaseImage(&inputYUV);
+      vxReleaseImage(&inputY);
+      vxReleaseImage(&inputU);
+      vxReleaseImage(&inputV);
+      vxReleaseImage(&scaledInputV);
+      vxReleaseImage(&scaledInputU);      
+      vxReleaseImage(&binaryU);
+      vxReleaseImage(&binaryV);
+      vxReleaseImage(&mask);
+      vxReleaseImage(&outY);
+      vxReleaseImage(&outU);
+      vxReleaseImage(&outV);
+      vxReleaseImage(&scaledOutV);
+      vxReleaseImage(&scaledOutU);
+
 
       //
       // Ensure highest graph optimization level
@@ -362,13 +483,23 @@ int main(int argc, char** argv)
       //release all objects
       //
 
-      vxReleaseNode(&toRGBNode);
+      vxReleaseNode(&convertNode);
+      vxReleaseNode(&extractYNode);
+      vxReleaseNode(&extractUNode);
+      vxReleaseNode(&extractVNode);
+      vxReleaseNode(&scaleVNode);
+      vxReleaseNode(&scaleUNode);
+      //vxReleaseNode(&thresholdUNode);
+      //vxReleaseNode(&thresholdVNode);
+      vxReleaseNode(&maskNode);
+      vxReleaseNode(&outYNode);
+      vxReleaseNode(&outUNode);
+      vxReleaseNode(&outVNode);
       vxReleaseNode(&recombineNode);
-      vxReleaseNode(&greenExtractNode);
-      /*      vxReleaseNode(&binNode);
-      vxReleaseNode(&erodeNode);
-      vxReleaseNode(&dilateNode);
-      */
+      //vxReleaseNode(&scaledOutUNode);
+      //vxReleaseNode(&scaledOutVNode);
+      //vxReleaseNode(&convertOutputNode);
+      
       
     }
   catch (const std::exception& e)
