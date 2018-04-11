@@ -122,13 +122,18 @@ namespace {
   
   struct EventData
   {
-    EventData(): alive(true), pause(false){}
+    EventData(): alive(true), pause(false), showSource(false), pixelQuery(false), x(0), y(0) {}
 
     bool alive;
     bool pause;
+    bool showSource;
+    bool pixelQuery;
+    vx_uint32 x;
+    vx_uint32 y;
+    
   };
 
-  static void keyboardEventCallback(void* context, vx_char key, vx_uint32 /*x*/, vx_uint32 /*y*/)
+  static void keyboardEventCallback(void* context, vx_char key, vx_uint32 x, vx_uint32 y)
   {
     EventData* eventData = static_cast<EventData*>(context);
     if(key == 27) //escape
@@ -138,6 +143,16 @@ namespace {
     else if (key == 32) //space
       {
         eventData->pause = !eventData->pause;
+      }
+    else if (key=='m')
+      {
+        eventData->showSource = !eventData->showSource;
+      }
+    else if (key='q')
+      {
+        eventData->x = x;
+        eventData->y = y;
+        eventData->pixelQuery = true;
       }
   }
 }; //namespace
@@ -214,7 +229,7 @@ int main(int argc, char** argv)
         {
           std::cout << "Error: cannot set the frame source to the specified configuration!" << std::endl;
           return nvxio::Application::APP_EXIT_CODE_NO_RESOURCE;
-          }
+        }
 
       if(!frameSource->open())
         {
@@ -248,49 +263,47 @@ int main(int argc, char** argv)
       NVXIO_CHECK_REFERENCE(output);
 
       //thresholds
-      vx_threshold uThreshold = vxCreateThreshold(context,VX_THRESHOLD_TYPE_RANGE,VX_TYPE_UINT8);
-      NVXIO_CHECK_REFERENCE(uThreshold);
-      NVXIO_SAFE_CALL( vxSetThresholdAttribute(uThreshold, VX_THRESHOLD_THRESHOLD_LOWER,
-                                               &params.uLowerThreshold,sizeof(params.uLowerThreshold)));
-      NVXIO_SAFE_CALL( vxSetThresholdAttribute(uThreshold, VX_THRESHOLD_THRESHOLD_UPPER,
-                                               &params.uUpperThreshold,sizeof(params.uUpperThreshold)));
-
-      vx_threshold vThreshold = vxCreateThreshold(context,VX_THRESHOLD_TYPE_RANGE,VX_TYPE_UINT8);
-      NVXIO_CHECK_REFERENCE(vThreshold);
-      NVXIO_SAFE_CALL( vxSetThresholdAttribute(vThreshold, VX_THRESHOLD_THRESHOLD_LOWER,
-                                               &params.vLowerThreshold,sizeof(params.vLowerThreshold)));
-      NVXIO_SAFE_CALL( vxSetThresholdAttribute(vThreshold, VX_THRESHOLD_THRESHOLD_UPPER,
-                                               &params.vUpperThreshold,sizeof(params.vUpperThreshold)));
 
       vx_int32 fVal = 255;
       vx_int32 tVal = 0;
-      vx_threshold binuThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
-      vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_THRESHOLD_VALUE,
-                              &params.uUpperThreshold, sizeof(params.uUpperThreshold));
-      vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_FALSE_VALUE,
-                              &fVal, sizeof(fVal));
-      vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_TRUE_VALUE,
-                              &tVal, sizeof(tVal));
+      vx_threshold binuThresh = vxCreateThreshold(context,VX_THRESHOLD_TYPE_RANGE,VX_TYPE_UINT8);
+      NVXIO_CHECK_REFERENCE(binuThresh);
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_THRESHOLD_LOWER,
+                                               &params.uLowerThreshold,sizeof(params.uLowerThreshold)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_THRESHOLD_UPPER,
+                                               &params.uUpperThreshold,sizeof(params.uUpperThreshold)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_FALSE_VALUE,
+                                               &fVal,sizeof(fVal)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_TRUE_VALUE,
+                                               &tVal,sizeof(tVal)));
 
-      vx_threshold binvThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
-      vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_THRESHOLD_VALUE,
-                              &params.vUpperThreshold, sizeof(params.vUpperThreshold));
-      vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_FALSE_VALUE,
-                              &fVal, sizeof(fVal));
-      vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_TRUE_VALUE,
-                              &tVal, sizeof(tVal));
+      vx_threshold binvThresh = vxCreateThreshold(context,VX_THRESHOLD_TYPE_RANGE,VX_TYPE_UINT8);
+      NVXIO_CHECK_REFERENCE(binvThresh);
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_THRESHOLD_LOWER,
+                                               &params.vLowerThreshold,sizeof(params.vLowerThreshold)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_THRESHOLD_UPPER,
+                                               &params.vUpperThreshold,sizeof(params.vUpperThreshold)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_FALSE_VALUE,
+                                               &fVal,sizeof(fVal)));
+      NVXIO_SAFE_CALL( vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_TRUE_VALUE,
+                                               &tVal,sizeof(tVal)));
 
-      vx_int32 uvVal = 1;
-      fVal = 128;
-      vx_threshold uvThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
-      vxSetThresholdAttribute(uvThresh, VX_THRESHOLD_THRESHOLD_VALUE,
-                              &uvVal, sizeof(uvVal));
-      vxSetThresholdAttribute(uvThresh, VX_THRESHOLD_FALSE_VALUE,
-                            &fVal, sizeof(fVal));
+      /*
+        vx_threshold binuThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
+        vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_THRESHOLD_VALUE,
+        &params.uUpperThreshold, sizeof(params.uUpperThreshold));
+        vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_FALSE_VALUE,
+        &fVal, sizeof(fVal));
+        vxSetThresholdAttribute(binuThresh, VX_THRESHOLD_TRUE_VALUE,
+        &tVal, sizeof(tVal));
 
-                              
-                              
-                              
+        vx_threshold binvThresh = vxCreateThreshold(context, VX_THRESHOLD_TYPE_BINARY, VX_TYPE_UINT8);
+        vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_THRESHOLD_VALUE,
+        &params.vUpperThreshold, sizeof(params.vUpperThreshold));
+        vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_FALSE_VALUE,
+        &fVal, sizeof(fVal));
+        vxSetThresholdAttribute(binvThresh, VX_THRESHOLD_TRUE_VALUE,
+        &tVal, sizeof(tVal));*/
 
       //create graph
       vx_graph graph = vxCreateGraph(context);
@@ -305,9 +318,6 @@ int main(int argc, char** argv)
 
       vx_image inputY = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
       NVXIO_CHECK_REFERENCE(inputY);
-
-      vx_image scaledInputY = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
-      NVXIO_CHECK_REFERENCE(scaledInputY);      
 
       vx_image inputU = vxCreateVirtualImage(graph, 0,0,VX_DF_IMAGE_U8);
       NVXIO_CHECK_REFERENCE(inputU);
@@ -338,22 +348,37 @@ int main(int argc, char** argv)
 
       vx_image outV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
       NVXIO_CHECK_REFERENCE(outV);
-
-      vx_image threshedOutU = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
-      vx_image threshedOutV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
-
-      vx_image scaledOutV = vxCreateVirtualImage(graph, frameConfig.frameWidth/2, frameConfig.frameHeight/2, VX_DF_IMAGE_U8);
-      vx_image scaledOutU = vxCreateVirtualImage(graph, frameConfig.frameWidth/2, frameConfig.frameHeight/2, VX_DF_IMAGE_U8);
       
-
+      vx_image offsetOutU = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(offsetOutU);
+      
+      vx_image offsetOutV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(offsetOutV);
+      
+      vx_image scaledOutV = vxCreateVirtualImage(graph, frameConfig.frameWidth/2, frameConfig.frameHeight/2, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(scaledOutV);
+      
+      vx_image scaledOutU = vxCreateVirtualImage(graph, frameConfig.frameWidth/2, frameConfig.frameHeight/2, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(scaledOutU);
       
       vx_image outYUV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_IYUV);
-
-
-
-
+      NVXIO_CHECK_REFERENCE(outYUV);
       
+      vx_image antiMask = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(antiMask);
 
+      vx_image antiBinaryU = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(antiBinaryU);
+
+      vx_image antiBinaryV = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(antiBinaryV);
+      
+      vx_pixel_value_t uniVal = {U8:128};
+      vx_image uniform = vxCreateUniformImage(context, frameConfig.frameWidth, frameConfig.frameHeight, VX_DF_IMAGE_U8, &uniVal);
+      NVXIO_CHECK_REFERENCE(uniform);
+      
+      vx_image maskedUniform = vxCreateVirtualImage(graph, 0,0, VX_DF_IMAGE_U8);
+      NVXIO_CHECK_REFERENCE(maskedUniform);
 
 
       //
@@ -361,45 +386,76 @@ int main(int argc, char** argv)
       //
 
       vx_node convertNode = vxColorConvertNode(graph, frame, inputYUV);
+      NVXIO_CHECK_REFERENCE(convertNode);
+      
       vx_node extractYNode = vxChannelExtractNode(graph, inputYUV, VX_CHANNEL_Y, inputY);
+      NVXIO_CHECK_REFERENCE(extractYNode);
+      
       vx_node extractUNode = vxChannelExtractNode(graph, inputYUV, VX_CHANNEL_U, inputU);
+      NVXIO_CHECK_REFERENCE(extractUNode);
+      
       vx_node extractVNode = vxChannelExtractNode(graph, inputYUV, VX_CHANNEL_V, inputV);
+      NVXIO_CHECK_REFERENCE(extractVNode);
+      
       vx_node scaleUNode = vxScaleImageNode(graph, inputU, scaledInputU, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      NVXIO_CHECK_REFERENCE(scaleUNode);
+      
       vx_node scaleVNode = vxScaleImageNode(graph, inputV, scaledInputV, VX_INTERPOLATION_NEAREST_NEIGHBOR);
-      vx_node thresholdUNode1 = vxThresholdNode(graph, scaledInputU, binuThresh, binaryU);
-      vx_node thresholdVNode1 = vxThresholdNode(graph, scaledInputV, binvThresh, binaryV);
+      NVXIO_CHECK_REFERENCE(scaleVNode);
       
+      vx_node thresholdUNode = vxThresholdNode(graph, scaledInputU, binuThresh, binaryU);
+      //vx_node thresholdUNode1 = vxThresholdNode(graph, scaledInputU, binuThresh, output);
+      NVXIO_CHECK_REFERENCE(thresholdUNode);
+      
+      vx_node thresholdVNode = vxThresholdNode(graph, scaledInputV, binvThresh, binaryV);
+      //vx_node thresholdVNode1 = vxThresholdNode(graph, scaledInputV, binvThresh, output);
+      NVXIO_CHECK_REFERENCE(thresholdVNode);
 
-      vx_node maskNode = vxAndNode(graph, binaryU, binaryV, mask);
-      //vx_node maskNode1 = vxAndNode(graph, binaryU, binaryV, output);
+      vx_node antiBinUNode = vxNotNode(graph, binaryU, antiBinaryU);
+      NVXIO_CHECK_REFERENCE(antiBinUNode);
+
+      vx_node antiBinVNode = vxNotNode(graph, binaryV, antiBinaryV);
+      NVXIO_CHECK_REFERENCE(antiBinVNode);
+      
+      vx_node maskNode = vxAndNode(graph, antiBinaryU, antiBinaryV, mask);
+      //vx_node maskNode1 = vxAndNode(graph, antiBinaryU, antiBinaryV, output);
+      NVXIO_CHECK_REFERENCE(maskNode);
+      
+      vx_node antiMaskNode = vxNotNode(graph, mask, antiMask);
+      //vx_node maskNode1 = vxNotNode(graph, mask, output);
+      NVXIO_CHECK_REFERENCE(antiMaskNode);
+      
+      vx_node maskedUniformNode = vxAndNode(graph, uniform, antiMask, maskedUniform);
+      NVXIO_CHECK_REFERENCE(maskedUniformNode);
+      
       vx_node outYNode = vxAndNode(graph, inputY, mask, outY);
+      NVXIO_CHECK_REFERENCE(outYNode);
+      
       vx_node outUNode = vxAndNode(graph, scaledInputU, mask, outU);
+      NVXIO_CHECK_REFERENCE(outUNode);
+      
       vx_node outVNode = vxAndNode(graph, scaledInputV, mask, outV);
-      vx_node scaleOutVNode = vxScaleImageNode(graph, outV, scaledOutV, VX_INTERPOLATION_NEAREST_NEIGHBOR);
-      vx_node scaleOutUNode = vxScaleImageNode(graph, outU, scaledOutU, VX_INTERPOLATION_NEAREST_NEIGHBOR);
-      vx_node outUThresholdNode = vxThresholdNode(graph, scaledOutU, uvThresh, threshedOutU);
-      vx_node outVThresholdNode = vxThresholdNode(graph, scaledOutV, uvThresh, threshedOutV);
-
-
-            
-
-      vx_node recombineNode = vxChannelCombineNode(graph, outY, threshedOutU, threshedOutV, NULL, outYUV);
-
+      NVXIO_CHECK_REFERENCE(outVNode);
+      
+      vx_node offsetUNode = vxAddNode(graph, outU, maskedUniform, VX_CONVERT_POLICY_SATURATE, offsetOutU);
+      NVXIO_CHECK_REFERENCE(offsetUNode);
+      
+      vx_node offsetVNode = vxAddNode(graph, outV, maskedUniform, VX_CONVERT_POLICY_SATURATE, offsetOutV);
+      NVXIO_CHECK_REFERENCE(offsetVNode);
+      
+      vx_node scaleOutVNode = vxScaleImageNode(graph, offsetOutV, scaledOutV, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      NVXIO_CHECK_REFERENCE(scaleOutVNode);
+      
+      vx_node scaleOutUNode = vxScaleImageNode(graph, offsetOutU, scaledOutU, VX_INTERPOLATION_NEAREST_NEIGHBOR);
+      NVXIO_CHECK_REFERENCE(scaleOutUNode);
+      
+      vx_node recombineNode = vxChannelCombineNode(graph, outY, scaledOutU, scaledOutV, NULL, outYUV);
+      //vx_node recombineNode = vxChannelCombineNode(graph, inputY, scaledOutU, scaledOutV, NULL, outYUV);
+      NVXIO_CHECK_REFERENCE(recombineNode);
+                          
       vx_node convertOutputNode = vxColorConvertNode(graph, outYUV, output);
+      NVXIO_CHECK_REFERENCE(convertOutputNode);
 
-      
-
-      
-      /*
-      vx_node binNode = vxThresholdNode(graph, green, binaryThreshold, binary);
-      NVXIO_CHECK_REFERENCE(binNode);
-
-      vx_node erodeNode = vxErode3x3Node(graph, binary, eroded);
-      NVXIO_CHECK_REFERENCE(erodeNode);
-
-      vx_node dilateNode = vxDilate3x3Node(graph, eroded, output);
-      NVXIO_CHECK_REFERENCE(dilateNode);
-      */
 
 
       //
@@ -444,34 +500,112 @@ int main(int argc, char** argv)
       //
       //main loop
       //
-      ovxio::FrameSource::FrameStatus frameStatus = frameSource->fetch(frame);      
+      ovxio::FrameSource::FrameStatus frameStatus = frameSource->fetch(frame);
+
+      std::unique_ptr<nvxio::SyncTimer> syncTimer = nvxio::createSyncTimer();
+      syncTimer->arm(1. / app.getFPSLimit());
+
+      double proc_ms = 0;
+      nvx::Timer totalTimer;
+      totalTimer.tic();      
+
       while(eventData.alive)
         {
+          if(eventData.pixelQuery)
+            {
+              eventData.pixelQuery = false;
+              vx_rectangle_t rect;
+              rect.start_x = eventData->x;
+              rect.start_y = eventData->y;
+              rect.end_x = rect.start_x + 1;
+              rect.end_y = rect.start_y + 1;
+
+              vx_map_id* map_id;
+              vx_imagepatch_addressing_t addr;
+              void** ptr;
+
+              
+            }
           if(!eventData.pause)
             {
               frameStatus = frameSource->fetch(frame);
-            }
+       
 
-          if(frameStatus == ovxio::FrameSource::TIMEOUT)
-            {
-              continue;
-            }
+              if(frameStatus == ovxio::FrameSource::TIMEOUT)
+                {
+                  continue;
+                }
           
-          if (frameStatus == ovxio::FrameSource::CLOSED)
+              if (frameStatus == ovxio::FrameSource::CLOSED)
+                {
+                  if (!frameSource->open())
+                    {
+                      std::cerr << "Error: Failed to reopen the source" << std::endl;
+                      break;
+                    }
+                  continue;
+                }
+
+              //
+              // process graph
+              //
+
+              nvx::Timer procTimer;
+              procTimer.tic();
+              
+
+              NVXIO_SAFE_CALL(vxProcessGraph(graph));
+
+              proc_ms = procTimer.toc();
+            }
+
+          double total_ms = totalTimer.toc();
+
+          std::cout << "Display Time : " << total_ms << " ms" << std::endl << std::endl;
+
+          syncTimer->synchronize();
+
+          total_ms = totalTimer.toc();
+
+          totalTimer.tic();
+
+          if (eventData.showSource)
             {
-              std::cout << "Finished!" << std::endl;
-              break;
+              render->putImage(frame);
+            }
+          else
+            {
+              render->putImage(output);
             }
 
           //
-          // process graph
+          // Display information and performance metrics
           //
 
-          NVXIO_SAFE_CALL(vxProcessGraph(graph));
+          std::ostringstream msg;
+          msg << std::fixed << std::setprecision(1);
 
-          //          std::cout << vxuChannelExtract(context, frame, VX_CHANNEL_G, output) << std::endl;
+          msg << "Resolution: " << frameConfig.frameWidth << 'x' << frameConfig.frameHeight << std::endl;
+          msg << "Algorithm: " << proc_ms << " ms / " << 1000.0 / proc_ms << " FPS" << std::endl;
+          msg << "Display: " << total_ms  << " ms / " << 1000.0 / total_ms << " FPS" << std::endl;
 
-          render->putImage(output);
+          msg << std::setprecision(6);
+          msg.unsetf(std::ios_base::floatfield);
+          msg << "LIMITED TO " << app.getFPSLimit() << " FPS FOR DISPLAY" << std::endl;          
+          msg << "M - switch Source/Edges" << std::endl;
+          msg << "Space - pause/resume" << std::endl;
+          msg << "Esc - close the demo";
+
+          ovxio::Render::TextBoxStyle textStyle = {
+            {255u, 255u, 255u, 255u}, // color
+            {0u,   0u,   0u,   127u}, // bgcolor
+            {10u, 10u} // origin
+          };
+
+          render->putTextViewport(msg.str(), textStyle);
+
+
+
           if(!render->flush())
             {
               std::cout << "Finished!" << std::endl;
